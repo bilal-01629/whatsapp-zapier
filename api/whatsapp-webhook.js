@@ -1,45 +1,39 @@
 // api/whatsapp-webhook.js
 
-// Vercel Serverless Function: WhatsApp Cloud API -> Zapier
+const VERIFY_TOKEN = process.env.WHATSAPP_VERIFY_TOKEN;
+const ZAPIER_WEBHOOK_URL = process.env.ZAPIER_WEBHOOK_URL;
 
-export default async function handler(req, res) {
-  const ZAPIER_HOOK_URL = process.env.ZAPIER_HOOK_URL;
-  const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
+// Vercel Node serverless function (CommonJS style)
+module.exports = async (req, res) => {
+  const method = req.method;
 
-  if (!ZAPIER_HOOK_URL || !VERIFY_TOKEN) {
-    console.error("Missing env vars ZAPIER_HOOK_URL or VERIFY_TOKEN");
-    return res.status(500).json({ error: "Server misconfigured" });
-  }
-
-  if (req.method === "GET") {
-    // Meta webhook verification
+  // 1) Verification request (GET)
+  if (method === "GET") {
     const mode = req.query["hub.mode"];
     const token = req.query["hub.verify_token"];
     const challenge = req.query["hub.challenge"];
 
-    console.log("Verification request:", req.query);
+    console.log("Verification request:", { mode, token, challenge });
 
-    if (mode === "subscribe" && token === VERIFY_TOKEN) {
-      console.log("✅ Webhook verified successfully");
+    if (mode === "subscribe" && token === VERIFY_TOKEN && challenge) {
+      // Meta expects the hub.challenge string in the response body
       return res.status(200).send(challenge);
-    } else {
-      console.log("❌ Webhook verification failed");
-      return res.sendStatus(403);
     }
+
+    console.warn("Verification failed");
+    return res.sendStatus(403);
   }
 
-  if (req.method === "POST") {
-    // Incoming WhatsApp message / button click
-    console.log(
-      "Incoming WhatsApp webhook:",
-      JSON.stringify(req.body, null, 2)
-    );
+  // 2) Real webhook message (POST)
+  if (method === "POST") {
+    console.log("Incoming webhook body:", JSON.stringify(req.body, null, 2));
 
     try {
-      const zapierRes = await fetch(ZAPIER_HOOK_URL, {
+      // Forward the payload to Zapier
+      const zapierRes = await fetch(ZAPIER_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(req.body),
+        body: JSON.stringify(req.body || {}),
       });
 
       console.log("Forwarded to Zapier, status:", zapierRes.status);
@@ -47,10 +41,11 @@ export default async function handler(req, res) {
       console.error("Error forwarding to Zapier:", err.message);
     }
 
-    // Always reply 200 so Meta is happy
+    // Always return 200 so Meta is happy
     return res.sendStatus(200);
   }
 
+  // 3) Any other method
   res.setHeader("Allow", ["GET", "POST"]);
-  return res.status(405).end(`Method ${req.method} Not Allowed`);
-}
+  return res.status(405).end(`Method ${method} Not Allowed`);
+};
