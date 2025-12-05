@@ -1,0 +1,12 @@
+{
+  "name": "whatsapp-zapier",
+  "version": "1.0.0",
+  "description": "WhatsApp -> Zapier webhook proxy",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
